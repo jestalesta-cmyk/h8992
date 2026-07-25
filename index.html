@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FiveM Dev Tools — Server Resolver & System Console</title>
+    <meta name="description" content="The ultimate FiveM server developer toolkit. Resolve direct IP and run the H89 DEV System Console in real time.">
+    <meta name="theme-color" content="#0a0a0c">
+    <link rel="icon" href="/static/logo.png">
+    <link rel="stylesheet" href="/static/tailwind.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --bg-2: #0d0d10;
+            --panel: #111114;
+            --panel-2: #0e0e11;
+            --border: #26262b;
+            --border-soft: #1b1b1f;
+            --red: #f43f3f;
+            --red-dim: #b91c1c;
+            --red-soft: rgba(244, 63, 63, 0.12);
+            --text: #e6e6e9;
+            --muted: #8b8b93;
+        }
+
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+        .mono { font-family: 'Fira Code', ui-monospace, monospace; }
+
+        /* Multi-hue dynamic brand glow */
+        body::before {
+            content: "";
+            position: absolute;
+            top: -200px; left: 50%;
+            transform: translateX(-50%);
+            width: 900px; height: 500px;
+            background: radial-gradient(ellipse at center, rgba(244, 63, 63, 0.14), transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            transition: border-color .3s cubic-bezier(0.16, 1, 0.3, 1), transform .3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .panel:hover {
+            border-color: rgba(244, 63, 63, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .tag {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 10px; font-weight: 700; letter-spacing: .14em;
+            text-transform: uppercase;
+            color: var(--muted);
+            border: 1px solid var(--border);
+            background: var(--panel-2);
+            padding: 6px 12px; border-radius: 8px;
+        }
+        .tag .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+
+        .btn-glow {
+            background: var(--red);
+            color: #fff;
+            font-weight: 700;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(244, 63, 63, 0.35);
+            transition: all .2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .btn-glow:hover {
+            background: #ff5757;
+            box-shadow: 0 0 28px rgba(244, 63, 63, 0.55);
+            transform: translateY(-1px);
+        }
+        .btn-glow:active {
+            transform: translateY(1px);
+        }
+
+        .btn-outline {
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text);
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all .2s ease;
+        }
+        .btn-outline:hover {
+            border-color: var(--text);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: #2a2a30; border-radius: 99px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a3a42; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-red-600 selection:text-white relative">
+
+    <!-- Navigation Header -->
+    <header class="border-b border-[#1c1c20] bg-[#0b0b0d]/90 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/" class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-[#16161a] border border-[#2a2a30] flex items-center justify-center overflow-hidden">
+                        <img src="/static/logo.png" alt="FiveM Dev Tools Logo" class="w-full h-full object-cover">
+                    </div>
+                    <div class="leading-tight">
+                        <h1 class="text-base font-extrabold tracking-tight text-white">FiveM Dev Tools</h1>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Nav Links (Desktop) -->
+            <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-[#8b8b93]">
+                <a href="/" class="hover:text-white transition">Home</a>
+                <a href="/resolver.html" class="hover:text-white transition">Resolver</a>
+                <a href="#console" class="hover:text-white transition">H89 DEV Console</a>
+            </nav>
+
+            <div class="flex items-center gap-3">
+                <span class="tag"><span class="dot"></span> Operational</span>
+                <!-- Launch App Button -->
+                <a href="/resolver.html" class="btn-glow text-xs px-4 py-2 flex items-center gap-1.5">
+                    Launch Resolver
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main streamlined landing page -->
+    <main class="flex-grow max-w-6xl w-full mx-auto px-4 py-16 flex flex-col gap-16 relative z-10">
+
+        <!-- Hero Section -->
+        <section class="flex flex-col items-center text-center max-w-4xl mx-auto gap-6 mt-6">
+            <span class="tag animate-pulse">
+                <span class="dot"></span> The Ultimate Developer Portal
+            </span>
+            <h1 class="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white leading-tight tracking-tight bg-gradient-to-r from-white via-[#f3f3f6] to-[#a2a2aa] bg-clip-text text-transparent max-w-3xl uppercase">
+                FiveM Dev Tools
+            </h1>
+            <div class="flex flex-col sm:flex-row gap-3 mt-4 w-full justify-center">
+                <a href="/resolver.html" class="btn-glow px-8 py-4 text-sm font-bold flex items-center justify-center gap-2">
+                    Start Resolving <i class="fa-solid fa-arrow-right text-xs"></i>
+                </a>
+            </div>
+        </section>
+
+        <!-- H89 DEV System Console Section -->
+        <section id="console" class="space-y-12">
+            <div class="text-center max-w-2xl mx-auto">
+                <span class="tag mb-2"><span class="dot"></span> H89 DEV</span>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-1">H89 DEV CONSOLE</h2>
+            </div>
+
+            <div class="max-w-5xl mx-auto w-full">
+                <!-- Gorgeous Frame Container for Console -->
+                <div class="panel p-1 bg-[#050505] border-red-500/30 hover:border-red-500/50 shadow-2xl overflow-hidden rounded-xl transition duration-300">
+                    <!-- Action Bar above the iframe -->
+                    <div class="flex items-center justify-between px-4 py-3 bg-[#0a0a0c] border-b border-[#26262b] text-xs">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                            <span class="text-[#8b8b93] font-mono ml-2">h89_scanner_v1.0.sh</span>
+                        </div>
+                        <a href="/scanner.html" target="_blank" class="btn-outline px-3 py-1.5 text-[11px] font-semibold flex items-center gap-1.5 uppercase tracking-wide">
+                            <i class="fa-solid fa-expand text-[10px]"></i> Full Screen
+                        </a>
+                    </div>
+                    
+                    <!-- Boot/Launch Console Placeholder Screen -->
+                    <div id="consolePlaceholder" class="w-full flex flex-col items-center justify-center bg-[#050505] p-12 text-center relative overflow-hidden" style="height: 640px;">
+                        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(244,63,63,0.06),transparent_60%)] pointer-events-none"></div>
+                        
+                        <div class="space-y-6 relative z-10 max-w-md">
+                            <div class="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto text-red-400 text-2xl animate-pulse">
+                                <i class="fa-solid fa-terminal"></i>
+                            </div>
+                            <div class="space-y-2">
+                                <h3 class="font-mono text-xs font-bold text-red-500 uppercase tracking-widest">[ H89 DEV CONSOLE - OFFLINE ]</h3>
+                                <p class="text-xs text-[#8b8b93] leading-relaxed animate-pulse">Click the scan button below to scan directories, extract triggers, and load diagnostic GTA V vector maps inside local sandbox.</p>
+                            </div>
+                            
+                            <!-- Boot Trigger Button inside Console HTML -->
+                            <button onclick="bootConsole()" class="btn-glow px-6 py-3.5 text-xs font-bold font-mono tracking-widest uppercase flex items-center justify-center gap-2 mx-auto">
+                                <i class="fa-solid fa-power-off"></i> H89 Scanner
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- The embedded H89 DEV CONSOLE iframe (loaded dynamically via button click) -->
+                    <iframe id="consoleIframe" src="" class="w-full border-none hidden" style="height: 640px; background: #050505;"></iframe>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-[#1c1c20] bg-[#0b0b0d] py-10 mt-16 text-center text-xs text-[#6f6f77] flex flex-col gap-3 shrink-0">
+        <div class="max-w-6xl mx-auto px-4 w-full flex flex-col gap-3 items-center">
+            <p class="font-semibold text-[#8b8b93]">FiveM Dev Tools © 2026 BY H89 Dev</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+        // Tech terminal typewriter boot animation - 10 Second Realistic Hacker Sequence
+        function bootConsole() {
+            const placeholder = document.getElementById('consolePlaceholder');
+            const iframe = document.getElementById('consoleIframe');
+            
+            // Render the terminal shell structure first
+            placeholder.innerHTML = `
+                <div class="font-mono text-[11px] text-[#00ff41] text-left p-6 space-y-1.5 w-full max-w-lg leading-relaxed select-none h-[400px] overflow-y-auto" id="bootTerminal">
+                    <p class="text-red-500 font-bold animate-pulse">&gt; INITIALIZING H89_SECURITY_SCANNER_V1...</p>
+                </div>
+            `;
+            
+            const term = document.getElementById('bootTerminal');
+            
+            // List of log outputs with their relative delay in milliseconds
+            const logs = [
+                { text: "&gt; INJECTING LOCAL FILE SYSTEM SANDBOX OVERLAY... [ SUCCESS ]", delay: 750 },
+                { text: "&gt; ALLOCATING BUFFER STREAM SEGMENTS... [ OK ]", delay: 1500 },
+                { text: "&gt; RESOLVING CORE SECURITY SCOPES AND REPOSITORIES... [ CONNECTED ]", delay: 2250 },
+                { text: "&gt; DETECTING LUA AND JS VULNERABILITY TRIGGER PATTERNS...", delay: 3000 },
+                { text: "&gt; MOUNTING SECURITY ENGINES (FIVEGUARD & SHIELD PATTERNS)... [ LOADED ]", delay: 3800 },
+                { text: "&gt; PARSING BACKDOOR SIGNATURES: PerformHttpRequest, load, io.popen... [ 42 SCANS ACTIVE ]", delay: 4600 },
+                { text: "&gt; CONFIGURING LOCAL VECTOR NETWORK TRACER... [ ONLINE ]", delay: 5400 },
+                { text: "&gt; COMPILING GTA MAP RASTER LAYER TILES (SATELITE, ROAD, GRID)... [ 560 TILES LOADED ]", delay: 6200 },
+                { text: "&gt; SYNCHRONIZING LOS SANTOS GPS VECTOR MATRIX COORDINATES... [ CALIBRATED ]", delay: 7000 },
+                { text: "&gt; MOUNTING ENDPOINT TRIGGER SCOPES & CFX ROUTING ALIASES... [ OK ]", delay: 7800 },
+                { text: "&gt; ALLOCATING DATA TABLES AND SYSTEM LOG BUFFERS... [ MEMORY READY ]", delay: 8500 },
+                { text: "&gt; ESTABLISHING SECURE WEB INTERFACE FRAME... [ SECURE CONNECTION ]", delay: 9200 },
+                { text: "&gt; SYSTEM BOOT STRAP SUCCESSFUL. REDIRECTING TO SECURED ENVIRONMENT...", delay: 10000, class: "text-red-500 font-bold animate-pulse" }
+            ];
+            
+            // Schedule printing of each log entry
+            logs.forEach(log => {
+                setTimeout(() => {
+                    const p = document.createElement('p');
+                    if (log.class) p.className = log.class;
+                    p.innerHTML = log.text;
+                    term.appendChild(p);
+                    // Scroll to bottom to maintain visibility of new logs
+                    term.scrollTop = term.scrollHeight;
+                }, log.delay);
+            });
+            
+            // Finally load the scanner tool iframe exactly after 11.5 seconds (allowing users to read the final success log)
+            setTimeout(() => {
+                iframe.src = "/scanner.html";
+                iframe.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+            }, 11500);
+        }
+    </script>
+</body>
+</html>

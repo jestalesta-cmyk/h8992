@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FiveM CFX Finder — IP & Server Resolver</title>
+    <meta name="description" content="Resolve any FiveM CFX server to its real IP, port, players, resources and config variables.">
+    <meta name="theme-color" content="#0a0a0c">
+    <link rel="icon" href="/static/logo.png">
+    <link rel="stylesheet" href="/static/tailwind.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --bg-2: #0d0d10;
+            --panel: #111114;
+            --panel-2: #0e0e11;
+            --border: #26262b;
+            --border-soft: #1b1b1f;
+            --red: #f43f3f;
+            --red-dim: #b91c1c;
+            --red-soft: rgba(244, 63, 63, 0.12);
+            --text: #e6e6e9;
+            --muted: #8b8b93;
+        }
+
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+        .mono { font-family: 'Fira Code', ui-monospace, monospace; }
+
+        /* Subtle static brand glow (single hue, no animation) */
+        body::before {
+            content: "";
+            position: fixed;
+            top: -160px; left: 50%;
+            transform: translateX(-50%);
+            width: 700px; height: 360px;
+            background: radial-gradient(ellipse at center, rgba(244,63,63,0.10), transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ============ LAYOUT ============ */
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            transition: border-color .2s ease, background .2s ease;
+        }
+        .panel:hover { border-color: #34343b; }
+
+        .panel-accent {
+            border-top: 2px solid var(--red);
+        }
+        .panel-stat {
+            border-left: 2px solid var(--red);
+        }
+        .server-logo {
+            border: 1px solid #2a2a30;
+            box-shadow: 0 0 0 2px rgba(244,63,63,0.35), 0 0 18px rgba(244,63,63,0.18);
+        }
+
+        /* ============ TAGS / LABELS ============ */
+        .tag {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 10px; font-weight: 700; letter-spacing: .14em;
+            text-transform: uppercase;
+            color: var(--muted);
+            border: 1px solid var(--border);
+            background: var(--panel-2);
+            padding: 5px 10px; border-radius: 6px;
+        }
+        .tag .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+
+        /* ============ INPUT / BUTTON ============ */
+        .field {
+            background: var(--bg-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            transition: border-color .2s ease, box-shadow .2s ease;
+        }
+        .field:focus {
+            outline: none;
+            border-color: var(--red);
+            box-shadow: 0 0 0 1px var(--red);
+        }
+        .btn {
+            background: var(--red);
+            color: #fff;
+            font-weight: 700;
+            border-radius: 8px;
+            transition: background .2s ease, transform .05s ease;
+        }
+        .btn:hover { background: #ff5757; }
+        .btn:active { transform: translateY(1px); }
+        .btn:disabled { opacity: .6; cursor: not-allowed; }
+
+        /* ============ CHIPS ============ */
+        .chip {
+            border: 1px solid var(--border);
+            background: var(--panel-2);
+            border-radius: 7px;
+            transition: border-color .15s ease, color .15s ease;
+            color: var(--muted);
+        }
+        .chip:hover { border-color: var(--red-dim); color: var(--text); }
+
+        /* ============ TABS ============ */
+        .tab-btn {
+            position: relative;
+            color: var(--muted);
+            border-bottom: 2px solid transparent;
+            transition: color .2s ease, background .2s ease;
+        }
+        .tab-btn:hover { color: var(--text); background: rgba(255,255,255,.03); }
+        .tab-btn.active {
+            color: #fff;
+            border-bottom-color: var(--red);
+            background: var(--red-soft);
+        }
+
+        /* ============ DATA TABLE ============ */
+        .data-row:hover { background: rgba(255,255,255,.035); }
+        .data-row { transition: background .15s ease; cursor: pointer; }
+
+        /* ============ ENTRANCE ============ */
+        .animate-fadeIn { animation: fadeIn .4s ease forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* ============ SKELETON ============ */
+        .skel { background: #161619; border-radius: 8px; }
+
+        /* ============ SCROLLBAR ============ */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: #2a2a30; border-radius: 99px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a3a42; }
+
+        /* ============ TAILWIND v2 FALLBACK HELPERS ============ */
+        .bg-dark-950 { background-color: #050506 !important; }
+        .bg-slate-900 { background-color: #0f172a !important; }
+        .bg-slate-950 { background-color: #020617 !important; }
+        .text-slate-200 { color: #e2e8f0 !important; }
+        .text-slate-300 { color: #cbd5e1 !important; }
+        .text-slate-400 { color: #94a3b8 !important; }
+        .text-slate-500 { color: #64748b !important; }
+        .border-slate-800 { border-color: #1e293b !important; }
+        .border-slate-850 { border-color: #162035 !important; }
+        .text-red-400 { color: #f87171 !important; }
+        .text-emerald-400 { color: #34d399 !important; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-red-600 selection:text-white pb-12 relative">
+
+    <!-- Header -->
+    <header class="border-b border-[#1c1c20] bg-[#0b0b0d]/90 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/index.html" class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-[#16161a] border border-[#2a2a30] flex items-center justify-center overflow-hidden">
+                        <img src="/static/logo.png" alt="CFX Finder Logo" class="w-full h-full object-cover">
+                    </div>
+                    <div class="leading-tight">
+                        <h1 class="text-sm font-extrabold tracking-tight text-white">FiveM CFX Finder</h1>
+                    </div>
+                </a>
+            </div>
+            
+            <nav class="hidden md:flex items-center gap-5 text-xs font-semibold text-[#8b8b93]">
+                <a href="/index.html" class="hover:text-white transition">Home</a>
+                <a href="/resolver.html" class="text-white transition">Resolver</a>
+            </nav>
+
+            <div class="flex items-center gap-2">
+                <span class="tag"><span class="dot"></span> Operational</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-6xl w-full mx-auto px-4 py-10 flex flex-col gap-9 relative z-10">
+
+        <!-- Compact Hero Section for Application -->
+        <div class="max-w-3xl mt-4">
+            <span class="tag mb-4"><span class="dot"></span> CFX.RE Server Lookup</span>
+            <h1 id="heroTitle" class="text-2xl sm:text-3xl font-extrabold text-white leading-tight tracking-tight mt-2 mb-2 bg-gradient-to-r from-white via-[#f3f3f6] to-[#9a9aa2] bg-clip-text text-transparent">
+                IP & Server Resolver
+            </h1>
+            <p id="heroSub" class="text-xs sm:text-sm text-[#9a9aa2] leading-relaxed max-w-2xl">
+                Enter any FiveM join code or link below to scan real endpoints, extract direct IPs, view connected players, scan active scripts, and audit variables.
+            </p>
+        </div>
+
+        <!-- Search -->
+        <div class="max-w-2xl">
+            <form id="resolverForm" onsubmit="handleResolve(event)" class="flex flex-col sm:flex-row gap-2">
+                <div class="relative flex-grow">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-red-400 mono text-sm font-semibold">&gt;_</span>
+                    <input type="text" id="cfxCodeInput" required
+                        class="field block w-full pl-9 pr-4 py-3 text-sm mono placeholder:text-[#5a5a62]"
+                        placeholder="y4lg95  or  https://cfx.re/join/y4lg95">
+                </div>
+                <button type="submit" id="searchBtn"
+                    class="btn px-6 py-3 flex items-center justify-center gap-2 shrink-0">
+                    <i id="btnIcon" class="fa-solid fa-crosshairs"></i>
+                    <span>Resolve</span>
+                </button>
+            </form>
+
+            <!-- Recent -->
+            <div id="recentSection" class="mt-4 hidden animate-fadeIn">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-semibold uppercase tracking-wider text-[#6f6f77] flex items-center gap-1.5">
+                        <i class="fa-solid fa-clock-rotate-left"></i> Recent Searches
+                    </span>
+                    <button onclick="clearRecentSearches()" class="text-[10px] font-semibold uppercase tracking-wider text-[#6f6f77] hover:text-red-400 transition">Clear</button>
+                </div>
+                <div id="recentContainer" class="flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+
+        <!-- Error -->
+        <div id="errorCard" class="max-w-2xl hidden animate-fadeIn">
+            <div class="panel border-red-500/40 p-4 flex items-start gap-3">
+                <div class="text-red-400 mt-0.5"><i class="fa-solid fa-circle-exclamation"></i></div>
+                <div>
+                    <h3 id="errorTitle" class="text-xs font-bold text-red-300 uppercase tracking-wide">Error</h3>
+                    <p id="errorMsg" class="text-xs text-[#b9b9c0] mt-1 leading-relaxed"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Skeleton -->
+        <div id="loaderSkeleton" class="max-w-5xl hidden space-y-4">
+            <div class="panel p-6 flex items-center gap-5">
+                <div class="skel w-20 h-20"></div>
+                <div class="flex-grow space-y-2">
+                    <div class="skel h-5 w-1/3"></div>
+                    <div class="skel h-3 w-2/3"></div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="skel h-32"></div><div class="skel h-32"></div><div class="skel h-32"></div>
+            </div>
+        </div>
+
+        <!-- Results Dashboard -->
+        <div id="resultsDashboard" class="max-w-5xl hidden flex flex-col gap-5">
+
+            <!-- Fake player warning banner -->
+            <div id="fakeWarning" class="hidden panel border-red-500/40 p-3.5 flex items-start gap-3 animate-fadeIn">
+                <i class="fa-solid fa-triangle-exclamation text-red-400 mt-0.5"></i>
+                <div class="text-xs text-[#dcdce1] leading-relaxed">
+                    <span class="font-bold text-red-400">Player count inflated.</span>
+                    <span id="fakeWarnText"></span>
+                </div>
+            </div>
+
+            <!-- Server header -->
+            <div class="panel panel-accent p-6 animate-fadeIn">
+                <div class="flex flex-col md:flex-row gap-5 items-center md:items-start text-center md:text-left">
+                    <div class="relative shrink-0">
+                        <div id="serverLogoContainer" class="server-logo w-20 h-20 bg-[#0e0e11] border border-[#2a2a30] rounded-lg flex items-center justify-center overflow-hidden">
+                            <img id="serverLogo" src="" alt="Server Logo" class="w-full h-full object-cover hidden">
+                            <i id="serverLogoPlaceholder" class="fa-solid fa-server text-2xl text-[#4a4a52]"></i>
+                        </div>
+                    </div>
+                    <div class="flex-grow space-y-2 min-w-0">
+                        <div class="flex items-center justify-center md:justify-start gap-2">
+                            <span id="statusBadge" class="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                <span id="statusText">Online</span>
+                            </span>
+                        </div>
+                        <h3 id="serverName" class="text-lg sm:text-xl font-extrabold text-white leading-snug break-words"></h3>
+                        <p id="serverDesc" class="text-xs text-[#9a9aa2] leading-relaxed line-clamp-2"></p>
+                        <div id="ownerSection" class="hidden flex items-center justify-center md:justify-start gap-2 pt-1">
+                            <span class="text-[10px] font-semibold uppercase tracking-wider text-[#6f6f77]">Owner:</span>
+                            <a id="ownerLink" href="" target="_blank" class="inline-flex items-center gap-1.5 text-xs font-semibold text-red-400 hover:underline">
+                                <img id="ownerAvatar" src="" alt="" class="w-4 h-4 rounded-full hidden">
+                                <span id="ownerNameVal">Name</span>
+                            </a>
+                        </div>
+                        <div id="serverTags" class="flex flex-wrap justify-center md:justify-start gap-1.5 pt-1"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="panel panel-stat p-5">
+                    <div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#8b8b93]">
+                        <span>Endpoint</span><i class="fa-solid fa-network-wired text-red-400"></i>
+                    </div>
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-[#6f6f77] mt-3">Direct IP</p>
+                    <div class="flex items-center gap-2 mt-1.5 bg-[#0e0e11] border border-[#1b1b1f] rounded-lg p-2">
+                        <span id="ipText" class="truncate flex-grow mono text-sm text-red-400 font-semibold select-all">Resolving…</span>
+                        <button onclick="copyToClipboard('ipText', 'ipCopyBtn')" id="ipCopyBtn" class="text-[#8b8b93] hover:text-white transition px-1.5" title="Copy">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+                    <div class="mt-3 flex items-center justify-between text-[11px]">
+                        <span class="mono text-[#6f6f77]">code: <span id="cfxCodeLabel" class="text-red-400">y4lg95</span></span>
+                        <a id="launcherConnectBtn" href="" class="text-red-400 hover:text-white font-semibold flex items-center gap-1">
+                            <span>Connect</span> <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="panel panel-stat p-5">
+                    <div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#8b8b93]">
+                        <span>Players</span><i class="fa-solid fa-users text-red-400"></i>
+                    </div>
+                    <div class="mt-3 flex items-baseline gap-1.5">
+                        <span id="playerCountBig" class="text-3xl font-extrabold text-white mono">0</span>
+                        <span class="text-[#6f6f77] font-bold">/</span>
+                        <span id="playerMaxBig" class="text-[#9a9aa2] text-lg font-bold mono">0</span>
+                    </div>
+                    <div class="w-full bg-[#0e0e11] rounded-full h-1.5 mt-3 overflow-hidden border border-[#1b1b1f]">
+                        <div id="playerProgress" class="bg-red-500 h-full rounded-full transition-all duration-700" style="width:0%"></div>
+                    </div>
+                    <div class="mt-2 text-[10px] mono flex items-center gap-2 text-[#8b8b93]">
+                        <span>real <span id="realCountVal" class="text-emerald-400 font-bold">—</span></span>
+                        <span class="text-[#3a3a42]">·</span>
+                        <span>reported <span id="reportedCountVal" class="text-[#c9c9cf] font-bold">—</span></span>
+                        <span id="fakeBadge" class="hidden text-red-400 font-bold">fake <span id="fakeCountVal">0</span></span>
+                    </div>
+                    <div class="mt-3 text-[10px] uppercase font-bold tracking-wider text-[#6f6f77] flex justify-between">
+                        <span>Source</span><span id="playerSourceLabel" class="text-red-400">Master API</span>
+                    </div>
+                </div>
+
+                <div class="panel panel-stat p-5">
+                    <div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#8b8b93]">
+                        <span>Specs</span><i class="fa-solid fa-microchip text-red-400"></i>
+                    </div>
+                    <div class="mt-3 space-y-1.5 text-xs">
+                        <div class="flex justify-between"><span class="text-[#8b8b93]">Build</span><span id="gameBuildVal" class="text-[#dcdce1] font-semibold mono">—</span></div>
+                        <div class="flex justify-between"><span class="text-[#8b8b93]">Mode</span><span id="gameNameVal" class="text-[#dcdce1] font-semibold uppercase">—</span></div>
+                        <div class="flex justify-between"><span class="text-[#8b8b93]">Locale</span><span id="localeVal" class="text-[#dcdce1] font-semibold mono">—</span></div>
+                    </div>
+                    <div class="mt-3 pt-2 border-t border-[#1b1b1f] text-[10px] uppercase font-bold tracking-wider text-[#6f6f77] flex justify-between">
+                        <span>Last seen</span><span id="lastSeenVal" class="text-emerald-400 mono">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics -->
+            <div id="analyticsSection" class="grid grid-cols-2 gap-3 animate-fadeIn">
+                <div class="panel panel-stat p-3.5 flex items-center gap-3">
+                    <div class="text-amber-400"><i class="fa-solid fa-gauge-high"></i></div>
+                    <div><p class="text-[9px] uppercase tracking-wider text-[#6f6f77] font-bold">Avg Ping</p><h5 id="avgPingVal" class="text-sm font-bold mono">0ms</h5></div>
+                </div>
+
+                <div class="panel panel-stat p-3.5 flex items-center gap-3">
+                    <div class="text-red-400"><i class="fa-solid fa-arrow-trend-up"></i></div>
+                    <div><p class="text-[9px] uppercase tracking-wider text-[#6f6f77] font-bold">Upvotes</p><h5 id="upvotePowerVal" class="text-sm font-bold mono">0</h5></div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="panel overflow-hidden flex flex-col">
+                <div class="flex border-b border-[#1b1b1f] overflow-x-auto bg-[#0c0c0e]">
+                    <button onclick="switchTab('players')" id="tabBtn-players" class="tab-btn active px-5 py-3.5 text-xs font-bold uppercase tracking-wider border-b-2 flex items-center gap-2 shrink-0">
+                        <i class="fa-solid fa-user-group"></i> <span>Players</span>
+                    </button>
+                    <button onclick="switchTab('resources')" id="tabBtn-resources" class="tab-btn px-5 py-3.5 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent flex items-center gap-2 shrink-0">
+                        <i class="fa-solid fa-cubes"></i> <span>Resources</span>
+                        <span id="resourcesCountBadge" class="bg-[#1b1b1f] text-[#c9c9cf] px-1.5 py-0.5 rounded text-[10px] hidden mono">0</span>
+                    </button>
+                    <button onclick="switchTab('convars')" id="tabBtn-convars" class="tab-btn px-5 py-3.5 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent flex items-center gap-2 shrink-0">
+                        <i class="fa-solid fa-sliders"></i> <span>Config</span>
+                    </button>
+                    <button onclick="switchTab('raw')" id="tabBtn-raw" class="tab-btn px-5 py-3.5 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent flex items-center gap-2 shrink-0 mono">
+                        <i class="fa-solid fa-code"></i> <span>JSON</span>
+                    </button>
+                </div>
+
+                <div class="p-5">
+                    <!-- Players -->
+                    <div id="tabContent-players" class="tab-content animate-fadeIn">
+                        <div class="flex flex-col sm:flex-row justify-between gap-3 items-center mb-4">
+                            <h4 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-people-group text-red-400"></i> <span>Connected Players</span>
+                            </h4>
+                            <div class="flex gap-2 w-full sm:w-auto items-center">
+                                <button onclick="exportPlayersCSV()" class="chip px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 shrink-0">
+                                    <i class="fa-solid fa-file-csv text-red-400"></i> <span>Export CSV</span>
+                                </button>
+                                <button onclick="exportPlayersPDF()" class="chip px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 shrink-0">
+                                    <i class="fa-solid fa-file-pdf text-red-400"></i> <span>Export PDF</span>
+                                </button>
+                                <div class="relative w-full sm:w-52">
+                                    <input type="text" id="playerSearch" oninput="filterPlayers()" placeholder="Filter by name or ID…"
+                                        class="field w-full pl-8 pr-3 py-1.5 text-xs mono placeholder:text-[#5a5a62]">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-[#6f6f77] text-[10px]"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto border border-[#1b1b1f] rounded-lg">
+                            <table class="min-w-full text-xs text-left">
+                                <thead class="bg-[#0c0c0e] text-[#8b8b93] uppercase font-bold tracking-wider">
+                                    <tr>
+                                        <th class="px-5 py-3 w-16 text-center">ID</th>
+                                        <th class="px-5 py-3">Player</th>
+                                        <th class="px-5 py-3 w-24 text-center">Ping</th>
+                                        <th class="px-5 py-3 w-44">Identifiers</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="playersTableBody" class="divide-y divide-[#161619] text-[#dcdce1]"></tbody>
+                            </table>
+                        </div>
+                        <div id="playersFallback" class="hidden text-center py-12 flex flex-col gap-2 items-center">
+                            <i class="fa-solid fa-user-slash text-3xl text-[#3a3a42]"></i>
+                            <h5 class="text-sm font-semibold text-[#c9c9cf]">No active players</h5>
+                            <p class="text-xs text-[#6f6f77] max-w-sm">The player list is empty or not published by the server.</p>
+                        </div>
+                    </div>
+
+                    <!-- Resources -->
+                    <div id="tabContent-resources" class="tab-content hidden animate-fadeIn">
+                        <div class="flex flex-col sm:flex-row justify-between gap-3 items-center mb-4">
+                            <h4 class="text-xs font-bold text-white uppercase tracking-wider">Resources / Scripts</h4>
+                            <div class="flex gap-2 w-full sm:w-auto items-center">
+                                <div class="relative w-full sm:w-52">
+                                    <input type="text" id="resourceSearch" oninput="filterResources()" placeholder="Filter…"
+                                        class="field w-full pl-8 pr-3 py-1.5 text-xs mono placeholder:text-[#5a5a62]">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-[#6f6f77] text-[10px]"></i>
+                                </div>
+                                <button onclick="copyResourceList()" class="chip px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 shrink-0">
+                                    <i class="fa-regular fa-copy text-red-400"></i> <span>Copy</span>
+                                </button>
+                                <button onclick="exportResources()" class="chip px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 shrink-0">
+                                    <i class="fa-solid fa-download text-red-400"></i> <span>Save</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="resourcesGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-[380px] overflow-y-auto pr-1"></div>
+                        <div id="resourcesFallback" class="hidden text-center py-12 flex flex-col gap-2 items-center">
+                            <i class="fa-solid fa-cubes-stacked text-3xl text-[#3a3a42]"></i>
+                            <h5 class="text-sm font-semibold text-[#c9c9cf]">No resource list</h5>
+                            <p class="text-xs text-[#6f6f77] max-w-sm">This server hides its resource index.</p>
+                        </div>
+                    </div>
+
+                    <!-- Convars -->
+                    <div id="tabContent-convars" class="tab-content hidden animate-fadeIn">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="text-xs font-bold text-white uppercase tracking-wider">Configuration Variables</h4>
+                            <button onclick="exportConvarsJSON()" class="chip px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 shrink-0">
+                                <i class="fa-solid fa-file-code text-red-400"></i> <span>Export JSON</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto border border-[#1b1b1f] rounded-lg">
+                            <table class="min-w-full text-xs text-left">
+                                <thead class="bg-[#0c0c0e] text-[#8b8b93] uppercase font-bold tracking-wider">
+                                    <tr>
+                                        <th class="px-5 py-3 w-1/3">Key</th>
+                                        <th class="px-5 py-3">Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="convarsTableBody" class="divide-y divide-[#161619] mono text-[#dcdce1]"></tbody>
+                            </table>
+                        </div>
+                        <div id="convarsFallback" class="hidden text-center py-12 flex flex-col gap-2 items-center">
+                            <i class="fa-solid fa-sliders text-3xl text-[#3a3a42]"></i>
+                            <h5 class="text-sm font-semibold text-[#c9c9cf]">Variables locked</h5>
+                            <p class="text-xs text-[#6f6f77] max-w-sm">The local convars endpoint returned no data.</p>
+                        </div>
+                    </div>
+
+                    <!-- Raw -->
+                    <div id="tabContent-raw" class="tab-content hidden animate-fadeIn">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-xs text-[#8b8b93] font-mono font-bold uppercase">Response</span>
+                            <div class="flex gap-2">
+                                <button onclick="copyRawJson()" class="chip px-2.5 py-1.5 text-[10px] font-semibold flex items-center gap-1">
+                                    <i class="fa-regular fa-copy text-red-400"></i> <span>Copy</span>
+                                </button>
+                                <button onclick="downloadRawJson()" class="chip px-2.5 py-1.5 text-[10px] font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-download text-red-400"></i> <span>Download</span>
+                                </button>
+                            </div>
+                        </div>
+                        <pre id="rawJsonArea" class="mono text-[10px] bg-[#0c0c0e] border border-[#1b1b1f] rounded-lg p-4 overflow-auto max-h-[440px] text-red-400 select-all leading-relaxed"></pre>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Player modal -->
+    <div id="playerModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-200">
+        <div class="panel rounded-xl max-w-md w-full overflow-hidden">
+            <div class="h-1.5 bg-red-500"></div>
+            <div class="p-6 relative">
+                <button onclick="closePlayerModal()" class="absolute top-3 right-3 text-[#8b8b93] hover:text-white transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                <div class="flex items-center gap-3">
+                    <div id="modalPlayerAvatar" class="w-12 h-12 rounded-lg bg-[#0e0e11] border border-[#2a2a30] flex items-center justify-center text-lg font-bold text-red-400">A</div>
+                    <div>
+                        <h4 id="modalPlayerName" class="font-bold text-white">Player Name</h4>
+                        <p class="text-[10px] text-[#6f6f77] font-semibold uppercase tracking-wider">GTA V Client</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3 mt-5">
+                    <div class="bg-[#0e0e11] border border-[#1b1b1f] p-3 rounded-lg">
+                        <span class="text-[9px] uppercase tracking-wider text-[#6f6f77] font-bold">Server ID</span>
+                        <h6 id="modalPlayerId" class="text-sm font-extrabold text-red-400 mono mt-0.5">#0</h6>
+                    </div>
+                    <div class="bg-[#0e0e11] border border-[#1b1b1f] p-3 rounded-lg">
+                        <span class="text-[9px] uppercase tracking-wider text-[#6f6f77] font-bold">Ping</span>
+                        <h6 id="modalPlayerPing" class="text-sm font-extrabold text-emerald-400 mono mt-0.5">0ms</h6>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <span class="text-[10px] uppercase tracking-wider text-[#6f6f77] font-bold">Identifiers</span>
+                    <div id="modalIdentifiersList" class="mt-2 space-y-1.5 max-h-[160px] overflow-y-auto pr-1"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-[#1c1c20] bg-[#0b0b0d] py-6 text-center text-xs text-[#6f6f77] flex flex-col gap-1.5 shrink-0">
+        <p>FiveM CFX Finder © 2026 BY H89 Dev</p>
+    </footer>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-[#111114] border border-[#2a2a30] text-xs px-4 py-3 rounded-lg shadow-xl transform translate-y-20 opacity-0 transition-all duration-200 flex items-center gap-2.5 z-50">
+        <i class="fa-solid fa-circle-check text-emerald-400"></i>
+        <span id="toastMessage" class="font-semibold text-[#e6e6e9]">Copied</span>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        let activeTab = 'players';
+        let serverDataGlobal = null;
+        const MAX_RECENT_ITEMS = 8;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderRecentSearches();
+            
+            // Auto resolve if code is in query string
+            const urlParams = new URLSearchParams(window.location.search);
+            const codeParam = urlParams.get('code');
+            if (codeParam) {
+                setAndResolve(codeParam);
+            }
+        });
+
+        function setAndResolve(code) {
+            document.getElementById('cfxCodeInput').value = code;
+            handleResolve(null, code);
+        }
+
+        // Extremely powerful client-side fallback query when backend is 404 or fails!
+        async function resolveCfxClientSide(code) {
+            const target = 'https://servers-frontend.fivem.net/api/servers/single/' + code;
+            const proxies = [
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`,
+                `https://corsproxy.io/?${encodeURIComponent(target)}`,
+                `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(target)}`
+            ];
+            
+            for (const url of proxies) {
+                try {
+                    const res = await fetch(url);
+                    if (!res.ok) continue;
+                    const data = await res.json();
+                    if (data && data.Data) {
+                        const s = data.Data;
+                        
+                        // Parse Connect Endpoint
+                        const endpoint = s.connectEndPoints ? s.connectEndPoints[0] : null;
+                        const icon_url = s.iconVersion ? `https://frontend.cfx-services.net/api/servers/icon/${code}/${s.iconVersion}.png` : null;
+                        
+                        return {
+                            success: true,
+                            data: {
+                                code: code,
+                                join_url: `https://cfx.re/join/${code}`,
+                                endpoint: endpoint,
+                                clean_endpoint: endpoint,
+                                join_token: code,
+                                online: true,
+                                source: 'cfx_master_api_client',
+                                html_fallback: {
+                                    title: s.hostname || "",
+                                    players: `people_outline ${s.clients || 0}`,
+                                    icon_url: icon_url
+                                },
+                                details: {
+                                    resources: s.resources || [],
+                                    vars: s.vars || {},
+                                    server: s.server || 'FXServer',
+                                    icon: s.icon || null
+                                },
+                                players_list: s.players || [],
+                                dynamic_info: {
+                                    clients: s.clients || 0,
+                                    sv_maxclients: s.sv_maxclients || 32,
+                                    gametype: s.gametype || 'Roleplay',
+                                    mapname: s.mapname || 'San Andreas'
+                                },
+                                owner: {
+                                    name: s.ownerName,
+                                    profile: s.ownerProfile,
+                                    avatar: s.ownerAvatar
+                                },
+                                upvote_power: s.upvotePower || 0,
+                                last_seen: s.lastSeen
+                            }
+                        };
+                    }
+                } catch (e) {
+                    console.warn(`Proxy failed: ${url}`, e);
+                }
+            }
+            throw new Error("All client-side CORS proxies failed to resolve this server.");
+        }
+
+        async function handleResolve(event, forcedCode = null) {
+            if (event) event.preventDefault();
+
+            let inputVal = forcedCode || document.getElementById('cfxCodeInput').value;
+            if (!inputVal.trim()) return;
+            
+            inputVal = inputVal.trim();
+            let code = inputVal;
+            if (inputVal.includes('cfx.re/join/')) {
+                code = inputVal.split('cfx.re/join/')[1].split('?')[0].replace('/', '');
+            }
+
+            document.getElementById('resultsDashboard').classList.add('hidden');
+            document.getElementById('errorCard').classList.add('hidden');
+            document.getElementById('loaderSkeleton').classList.remove('hidden');
+
+            const searchBtn = document.getElementById('searchBtn');
+            const btnIcon = document.getElementById('btnIcon');
+            searchBtn.disabled = true;
+            btnIcon.className = "fa-solid fa-spinner animate-spin";
+
+            try {
+                // Try backend resolver first
+                const response = await fetch('/api/resolve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: code })
+                });
+                
+                if (response.ok) {
+                    const resData = await response.json();
+                    if (resData.success) {
+                        serverDataGlobal = resData.data;
+                        displayDashboard(serverDataGlobal);
+                        saveSearchToRecent(serverDataGlobal.code, serverDataGlobal.html_fallback.title || serverDataGlobal.code);
+                        return;
+                    }
+                }
+                
+                // If backend resolver fails or returns error, trigger client-side CORS proxy resolver!
+                console.log("Backend resolver unavailable or failed. Triggering client-side CORS proxy fallback...");
+                const clientRes = await resolveCfxClientSide(code);
+                if (clientRes.success) {
+                    serverDataGlobal = clientRes.data;
+                    displayDashboard(serverDataGlobal);
+                    saveSearchToRecent(serverDataGlobal.code, serverDataGlobal.html_fallback.title || serverDataGlobal.code);
+                    return;
+                }
+                
+                showError("Could not resolve this CFX code. Check connection or try another code.", "resolve_failed");
+            } catch (err) {
+                // Network error on backend request - use client-side resolver
+                try {
+                    console.log("Network error contacting backend. Using client-side CORS proxy fallback...");
+                    const clientRes = await resolveCfxClientSide(code);
+                    if (clientRes.success) {
+                        serverDataGlobal = clientRes.data;
+                        displayDashboard(serverDataGlobal);
+                        saveSearchToRecent(serverDataGlobal.code, serverDataGlobal.html_fallback.title || serverDataGlobal.code);
+                        return;
+                    }
+                } catch (clientErr) {
+                    showError("Could not reach server or resolve client-side. Please check your connection.", "network_error");
+                }
+            } finally {
+                searchBtn.disabled = false;
+                btnIcon.className = "fa-solid fa-crosshairs";
+                document.getElementById('loaderSkeleton').classList.add('hidden');
+            }
+        }
+
+        function showError(message, code) {
+            document.getElementById('resultsDashboard').classList.add('hidden');
+            document.getElementById('loaderSkeleton').classList.add('hidden');
+            document.getElementById('errorTitle').textContent = `Error (${code})`;
+            document.getElementById('errorMsg').textContent = message;
+            const ec = document.getElementById('errorCard');
+            ec.classList.remove('hidden');
+            ec.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function displayDashboard(data) {
+            const dashboard = document.getElementById('resultsDashboard');
+
+            const statusBadge = document.getElementById('statusBadge');
+            const statusText = document.getElementById('statusText');
+            if (data.online) {
+                statusBadge.className = "inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400";
+                statusText.textContent = "Online";
+            } else {
+                statusBadge.className = "inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-red-400";
+                statusText.textContent = "Offline";
+            }
+
+            let serverNameText = data.html_fallback.title || "FiveM Server";
+            if (data.details && data.details.vars && data.details.vars.sv_projectName) {
+                serverNameText = data.details.vars.sv_projectName;
+            } else if (data.dynamic_info && data.dynamic_info.hostname) {
+                serverNameText = data.dynamic_info.hostname;
+            }
+            document.getElementById('serverName').innerHTML = parseFiveMColors(serverNameText);
+
+            let serverDescText = "";
+            if (data.details && data.details.vars && data.details.vars.sv_projectDesc) {
+                serverDescText = data.details.vars.sv_projectDesc;
+            } else {
+                serverDescText = "No description provided.";
+            }
+            document.getElementById('serverDesc').textContent = serverDescText;
+
+            const serverLogo = document.getElementById('serverLogo');
+            const serverLogoPlaceholder = document.getElementById('serverLogoPlaceholder');
+            if (data.details && data.details.icon) {
+                serverLogo.src = `data:image/png;base64,${data.details.icon}`;
+                serverLogo.classList.remove('hidden');
+                serverLogoPlaceholder.classList.add('hidden');
+            } else if (data.html_fallback.icon_url) {
+                serverLogo.src = data.html_fallback.icon_url;
+                serverLogo.classList.remove('hidden');
+                serverLogoPlaceholder.classList.add('hidden');
+            } else {
+                serverLogo.classList.add('hidden');
+                serverLogoPlaceholder.classList.remove('hidden');
+            }
+
+            const ownerSection = document.getElementById('ownerSection');
+            if (data.owner && data.owner.name) {
+                ownerSection.classList.remove('hidden');
+                document.getElementById('ownerNameVal').textContent = data.owner.name;
+                document.getElementById('ownerLink').href = data.owner.profile || '#';
+                const ownerAvatar = document.getElementById('ownerAvatar');
+                if (data.owner.avatar) { ownerAvatar.src = data.owner.avatar; ownerAvatar.classList.remove('hidden'); }
+                else { ownerAvatar.classList.add('hidden'); }
+            } else {
+                ownerSection.classList.add('hidden');
+            }
+
+            const tagsContainer = document.getElementById('serverTags');
+            tagsContainer.innerHTML = '';
+            let tagsList = [];
+            if (data.details && data.details.vars && data.details.vars.tags) {
+                tagsList = data.details.vars.tags.split(',').map(t => t.trim()).filter(Boolean);
+            }
+            if (tagsList.length === 0) tagsList = ['fivem', 'roleplay', 'server'];
+            tagsList.slice(0, 8).forEach(tag => {
+                const badge = document.createElement('span');
+                badge.className = "text-[9px] font-bold text-[#c9c9cf] bg-[#161619] px-2 py-0.5 rounded border border-[#26262b] uppercase tracking-wider";
+                badge.textContent = tag;
+                tagsContainer.appendChild(badge);
+            });
+
+            let endpointStr = data.clean_endpoint || data.endpoint || "Not available";
+            if (endpointStr.startsWith('http://')) endpointStr = endpointStr.slice(7);
+            if (endpointStr.startsWith('https://')) endpointStr = endpointStr.slice(8);
+            if (endpointStr.endsWith('/')) endpointStr = endpointStr.slice(0, -1);
+            document.getElementById('ipText').textContent = endpointStr;
+            document.getElementById('cfxCodeLabel').textContent = data.code;
+            document.getElementById('launcherConnectBtn').href = `fivem://connect/cfx.re/join/${data.code}`;
+
+            let reported = 0, maxPlayers = 32, real = null;
+            if (data.dynamic_info && data.dynamic_info.clients !== undefined) {
+                reported = parseInt(data.dynamic_info.clients);
+                maxPlayers = parseInt(data.dynamic_info.sv_maxclients || 32);
+            } else if (data.html_fallback.players) {
+                const pMatch = data.html_fallback.players.match(/\d+/);
+                if (pMatch) reported = parseInt(pMatch[0]);
+                if (data.details && data.details.vars && data.details.vars.sv_maxClients) maxPlayers = parseInt(data.details.vars.sv_maxClients);
+            }
+            if (data.players_list && Array.isArray(data.players_list)) {
+                real = data.players_list.length;
+            }
+            const currentPlayers = (real !== null) ? real : reported;
+            const fake = (real !== null && reported > real) ? (reported - real) : 0;
+
+            document.getElementById('playerCountBig').textContent = currentPlayers;
+            document.getElementById('playerMaxBig').textContent = maxPlayers;
+            document.getElementById('realCountVal').textContent = (real !== null ? real : reported);
+            document.getElementById('reportedCountVal').textContent = reported;
+            const fakeBadge = document.getElementById('fakeBadge');
+            const fakeWarning = document.getElementById('fakeWarning');
+            if (fake > 0) {
+                fakeBadge.classList.remove('hidden');
+                document.getElementById('fakeCountVal').textContent = fake;
+                document.getElementById('fakeWarnText').textContent = ` ${fake} fake/bot player${fake > 1 ? 's' : ''} detected — reported ${reported} · real ${real}.`;
+                fakeWarning.classList.remove('hidden');
+            } else {
+                fakeBadge.classList.add('hidden');
+                fakeWarning.classList.add('hidden');
+            }
+
+            const percentage = maxPlayers > 0 ? (currentPlayers / maxPlayers) * 100 : 0;
+            document.getElementById('playerProgress').style.width = `${Math.min(100, percentage)}%`;
+
+            if (data.source === 'cfx_master_api' || data.source === 'cfx_master_api_client') document.getElementById('playerSourceLabel').textContent = "Master API";
+            else if (data.source === 'local_api') document.getElementById('playerSourceLabel').textContent = "Local Query";
+            else document.getElementById('playerSourceLabel').textContent = "Web Fallback";
+
+            let build = "—", gamename = "gta5", locale = "en-US", lastSeenStr = "Now";
+            if (data.details && data.details.vars) {
+                build = data.details.vars.sv_enforceGameBuild || data.details.vars.sv_defaultGameBuild || "2060";
+                gamename = data.details.vars.gamename || "gta5";
+                locale = data.details.vars.locale || "en-US";
+            }
+            if (data.last_seen) {
+                try {
+                    const date = new Date(data.last_seen);
+                    lastSeenStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + " " + date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                } catch (e) { lastSeenStr = "Now"; }
+            }
+            document.getElementById('gameBuildVal').textContent = build;
+            document.getElementById('gameNameVal').textContent = gamename.toUpperCase();
+            document.getElementById('localeVal').textContent = locale.toUpperCase();
+            document.getElementById('lastSeenVal').textContent = lastSeenStr;
+
+            let totalPing = 0, playersCountWithPing = 0, discordCount = 0, steamCount = 0;
+            if (data.players_list && Array.isArray(data.players_list) && data.players_list.length > 0) {
+                data.players_list.forEach(player => {
+                    if (player.ping !== undefined) { totalPing += player.ping; playersCountWithPing++; }
+                    if (player.identifiers && Array.isArray(player.identifiers)) {
+                        player.identifiers.forEach(id => { if (id.startsWith('discord:')) discordCount++; if (id.startsWith('steam:')) steamCount++; });
+                    }
+                });
+            }
+            const avgPing = playersCountWithPing > 0 ? Math.round(totalPing / playersCountWithPing) : 0;
+            const discordPct = currentPlayers > 0 ? Math.round((discordCount / currentPlayers) * 100) : 0;
+            const steamPct = currentPlayers > 0 ? Math.round((steamCount / currentPlayers) * 100) : 0;
+            document.getElementById('avgPingVal').textContent = avgPing > 0 ? `${avgPing}ms` : "—";
+            document.getElementById('upvotePowerVal').textContent = `${data.upvote_power || 0}`;
+
+            populatePlayersTab(data.players_list);
+            populateResourcesTab(data.details ? data.details.resources : null);
+            populateConvarsTab(data.details ? data.details.vars : null);
+            document.getElementById('rawJsonArea').textContent = JSON.stringify(data, null, 4);
+
+            switchTab('players');
+            dashboard.classList.remove('hidden');
+            dashboard.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function parseFiveMColors(text) {
+            if (!text) return '';
+            const colors = {
+                '1': 'color:#ef4444;font-weight:bold;', '2': 'color:#22c55e;font-weight:bold;',
+                '3': 'color:#f59e0b;font-weight:bold;', '4': 'color:#3b82f6;font-weight:bold;',
+                '5': 'color:#06b6d4;font-weight:bold;', '6': 'color:#a855f7;font-weight:bold;',
+                '7': 'color:#ffffff;', '8': 'color:#f97316;font-weight:bold;',
+                '9': 'color:#64748b;', '0': 'color:#6b7280;'
+            };
+            let html = '', currentStyle = '', i = 0;
+            while (i < text.length) {
+                if (text[i] === '^' && i + 1 < text.length) {
+                    let code = text[i+1];
+                    if (colors[code]) {
+                        if (currentStyle) html += '</span>';
+                        currentStyle = colors[code];
+                        html += `<span style="${currentStyle}">`;
+                        i += 2; continue;
+                    } else if (code === ';' || code === 'r') {
+                        if (currentStyle) { html += '</span>'; currentStyle = ''; }
+                        i += 2; continue;
+                    }
+                }
+                html += text[i]; i++;
+            }
+            if (currentStyle) html += '</span>';
+            return html;
+        }
+
+        function populatePlayersTab(players) {
+            const tableBody = document.getElementById('playersTableBody');
+            const fallback = document.getElementById('playersFallback');
+            const searchInput = document.getElementById('playerSearch');
+            tableBody.innerHTML = ''; searchInput.value = '';
+
+            if (!players || !Array.isArray(players) || players.length === 0) {
+                tableBody.closest('div').classList.add('hidden');
+                fallback.classList.remove('hidden');
+                return;
+            }
+            tableBody.closest('div').classList.remove('hidden');
+            fallback.classList.add('hidden');
+
+            players.forEach(player => {
+                const tr = document.createElement('tr');
+                tr.className = "data-row";
+                tr.setAttribute('data-name', player.name.toLowerCase());
+                tr.setAttribute('data-id', player.id);
+                tr.onclick = () => openPlayerModal(player);
+
+                let pingClass = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                if (player.ping > 150) pingClass = "bg-red-500/10 text-red-400 border border-red-500/20";
+                else if (player.ping > 80) pingClass = "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+
+                let identifiersHtml = '<div class="flex flex-wrap gap-1 max-w-[300px]">';
+                if (player.identifiers && Array.isArray(player.identifiers) && player.identifiers.length > 0) {
+                    player.identifiers.slice(0, 3).forEach(id => {
+                        const parts = id.split(':');
+                        if (parts.length >= 2) {
+                            const type = parts[0];
+                            let typeColor = "bg-[#161619] text-[#9a9aa2] border border-[#26262b]", icon = "fa-id-card";
+                            if (type === 'discord') { typeColor = "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20"; icon = "fa-brands fa-discord"; }
+                            else if (type === 'steam') { typeColor = "bg-blue-500/10 text-blue-300 border border-blue-500/20"; icon = "fa-brands fa-steam"; }
+                            else if (type === 'license') { typeColor = "bg-red-500/10 text-red-300 border border-red-500/20"; icon = "fa-key"; }
+                            identifiersHtml += `<span class="${typeColor} px-2 py-0.5 rounded text-[9px] font-bold flex items-center gap-1"><i class="${icon}"></i>${type}</span>`;
+                        }
+                    });
+                    if (player.identifiers.length > 3) identifiersHtml += `<span class="bg-[#161619] text-[#8b8b93] border border-[#26262b] px-2 py-0.5 rounded text-[9px] font-bold">+${player.identifiers.length - 3}</span>`;
+                } else {
+                    identifiersHtml += '<span class="text-[#6f6f77] font-bold italic">Protected</span>';
+                }
+                identifiersHtml += '</div>';
+
+                tr.innerHTML = `
+                    <td class="px-5 py-3 text-center font-bold text-red-400 mono">${player.id}</td>
+                    <td class="px-5 py-3 font-semibold text-[#e6e6e9] flex items-center gap-2">
+                        <div class="w-6 h-6 rounded bg-[#161619] border border-[#26262b] flex items-center justify-center text-xs font-bold text-red-400">${player.name.charAt(0).toUpperCase()}</div>
+                        ${escapeHtml(player.name)}
+                    </td>
+                    <td class="px-5 py-3 text-center"><span class="${pingClass} px-2 py-0.5 rounded font-mono font-bold">${player.ping}ms</span></td>
+                    <td class="px-5 py-3">${identifiersHtml}</td>`;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function filterPlayers() {
+            const query = document.getElementById('playerSearch').value.toLowerCase().trim();
+            document.querySelectorAll('#playersTableBody .data-row').forEach(row => {
+                const name = row.getAttribute('data-name'), id = row.getAttribute('data-id');
+                row.classList.toggle('hidden', !(name.includes(query) || id.includes(query)));
+            });
+        }
+
+        function populateResourcesTab(resources) {
+            const grid = document.getElementById('resourcesGrid');
+            const fallback = document.getElementById('resourcesFallback');
+            const countBadge = document.getElementById('resourcesCountBadge');
+            const searchInput = document.getElementById('resourceSearch');
+            grid.innerHTML = ''; searchInput.value = '';
+
+            if (!resources || !Array.isArray(resources) || resources.length === 0) {
+                grid.closest('div').classList.add('hidden');
+                fallback.classList.remove('hidden');
+                countBadge.classList.add('hidden');
+                return;
+            }
+            grid.closest('div').classList.remove('hidden');
+            fallback.classList.add('hidden');
+            countBadge.textContent = resources.length;
+            countBadge.classList.remove('hidden');
+
+            resources.sort().forEach(res => {
+                const tag = document.createElement('div');
+                tag.className = "bg-[#0e0e11] hover:bg-[#161619] border border-[#1b1b1f] hover:border-red-500/40 rounded-lg p-2.5 flex items-center gap-2 transition resource-card cursor-pointer group";
+                tag.setAttribute('data-name', res.toLowerCase());
+                tag.onclick = () => { navigator.clipboard.writeText(res); showToast("Copied script: " + res); };
+                tag.innerHTML = `
+                    <div class="text-red-400 group-hover:text-red-300 transition shrink-0"><i class="fa-solid fa-file-code text-xs"></i></div>
+                    <span class="text-[11px] mono text-[#c9c9cf] truncate w-full font-medium" title="Click to copy">${res}</span>`;
+                grid.appendChild(tag);
+            });
+        }
+
+        function filterResources() {
+            const query = document.getElementById('resourceSearch').value.toLowerCase().trim();
+            document.querySelectorAll('.resource-card').forEach(card => {
+                card.classList.toggle('hidden', !card.getAttribute('data-name').includes(query));
+            });
+        }
+
+        function populateConvarsTab(vars) {
+            const tbody = document.getElementById('convarsTableBody');
+            const fallback = document.getElementById('convarsFallback');
+            tbody.innerHTML = '';
+            if (!vars || typeof vars !== 'object' || Object.keys(vars).length === 0) {
+                tbody.closest('div').classList.add('hidden');
+                fallback.classList.remove('hidden');
+                return;
+            }
+            tbody.closest('div').classList.remove('hidden');
+            fallback.classList.add('hidden');
+            Object.keys(vars).sort().forEach(key => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-[#0e0e11] transition";
+                let displayVal = vars[key];
+                if (key.toLowerCase().includes('key') || key.toLowerCase().includes('token') || key.toLowerCase().includes('password')) displayVal = "•••••••••• [protected]";
+                tr.innerHTML = `<td class="px-5 py-2.5 font-semibold text-red-400 select-all">${key}</td><td class="px-5 py-2.5 text-[#dcdce1] break-all select-all font-semibold">${escapeHtml(displayVal)}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openPlayerModal(player) {
+            const modal = document.getElementById('playerModal');
+            document.getElementById('modalPlayerName').textContent = player.name;
+            document.getElementById('modalPlayerId').textContent = `#${player.id}`;
+            document.getElementById('modalPlayerPing').textContent = `${player.ping}ms`;
+            document.getElementById('modalPlayerAvatar').textContent = player.name.charAt(0).toUpperCase();
+            const pingVal = document.getElementById('modalPlayerPing');
+            if (player.ping > 150) pingVal.className = "text-sm font-extrabold text-red-400 mono mt-0.5";
+            else if (player.ping > 80) pingVal.className = "text-sm font-extrabold text-amber-400 mono mt-0.5";
+            else pingVal.className = "text-sm font-extrabold text-emerald-400 mono mt-0.5";
+
+            const idList = document.getElementById('modalIdentifiersList');
+            idList.innerHTML = '';
+            if (player.identifiers && Array.isArray(player.identifiers) && player.identifiers.length > 0) {
+                player.identifiers.forEach(id => {
+                    const parts = id.split(':');
+                    const type = parts[0], val = parts.slice(1).join(':');
+                    let icon = "fa-id-card";
+                    if (type === 'discord') icon = "fa-brands fa-discord text-indigo-400";
+                    else if (type === 'steam') icon = "fa-brands fa-steam text-blue-400";
+                    else if (type === 'license') icon = "fa-key text-red-400";
+                    const item = document.createElement('div');
+                    item.className = "bg-[#0e0e11] px-3 py-2 rounded-lg border border-[#1b1b1f] flex items-center justify-between gap-3 group/id hover:border-red-500/25 transition";
+                    item.innerHTML = `
+                        <div class="flex items-center gap-2 truncate">
+                            <i class="${icon} text-sm"></i>
+                            <div class="truncate">
+                                <p class="text-[8px] text-[#6f6f77] font-bold uppercase tracking-wider">${type}</p>
+                                <p class="text-[10px] text-[#dcdce1] font-semibold mono truncate max-w-[200px]" title="${id}">${val}</p>
+                            </div>
+                        </div>
+                        <button onclick="navigator.clipboard.writeText('${id}'); showToast('Identifier copied');" class="text-[#8b8b93] hover:text-white transition opacity-0 group-hover/id:opacity-100 p-1 bg-[#161619] rounded border border-[#26262b]">
+                            <i class="fa-regular fa-copy text-[10px]"></i>
+                        </button>`;
+                    idList.appendChild(item);
+                });
+            } else {
+                idList.innerHTML = '<p class="text-xs text-[#6f6f77] italic py-2 text-center">No identifiers exposed.</p>';
+            }
+            modal.classList.remove('hidden');
+            requestAnimationFrame(() => modal.classList.remove('opacity-0'));
+        }
+
+        function closePlayerModal() {
+            const modal = document.getElementById('playerModal');
+            modal.classList.add('opacity-0');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+        }
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayerModal(); });
+
+        function switchTab(tabId) {
+            activeTab = tabId;
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                if (btn.id === `tabBtn-${tabId}`) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.toggle('hidden', content.id !== `tabContent-${tabId}`);
+            });
+        }
+
+        function copyToClipboard(elementId, btnId) {
+            const text = document.getElementById(elementId).textContent;
+            navigator.clipboard.writeText(text);
+            const btn = document.getElementById(btnId);
+            const original = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-check text-emerald-400"></i>`;
+            showToast("IP copied to clipboard");
+            setTimeout(() => btn.innerHTML = original, 2000);
+        }
+
+        function copyResourceList() {
+            if (!serverDataGlobal || !serverDataGlobal.details || !serverDataGlobal.details.resources) return;
+            navigator.clipboard.writeText(serverDataGlobal.details.resources.join('\n'));
+            showToast("Resource list copied");
+        }
+
+        function copyRawJson() {
+            navigator.clipboard.writeText(document.getElementById('rawJsonArea').textContent);
+            showToast("JSON copied");
+        }
+
+        function downloadFile(filename, content, mime) {
+            const blob = new Blob([content], { type: mime });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("Downloaded " + filename);
+        }
+
+        // Export players to CSV
+        function exportPlayersCSV() {
+            if (!serverDataGlobal || !Array.isArray(serverDataGlobal.players_list)) { showToast("No players to export"); return; }
+            const rows = [['id', 'name', 'ping', 'identifiers']];
+            serverDataGlobal.players_list.forEach(p => {
+                rows.push([p.id, p.name, p.ping, (p.identifiers || []).join(' ')]);
+            });
+            const csv = rows.map(r => r.map(c => `"${String(c == null ? '' : c).replace(/"/g, '""')}"`).join(',')).join('\n');
+            downloadFile(`players_${serverDataGlobal.code}.csv`, csv, 'text/csv');
+        }
+
+        function exportPlayersPDF() {
+            if (!serverDataGlobal || !Array.isArray(serverDataGlobal.players_list)) { showToast("No players to export"); return; }
+            if (!window.jspdf || !window.jspdf.jsPDF) { showToast('PDF library not loaded (need internet)'); return; }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+            const name = (serverDataGlobal.details?.vars?.sv_projectName || serverDataGlobal.html_fallback?.title || 'FiveM Server');
+            doc.setFontSize(15); doc.text(`Players — ${serverDataGlobal.code}`, 40, 44);
+            doc.setFontSize(9); doc.setTextColor(120); doc.text(name.substring(0, 90), 40, 60); doc.setTextColor(0);
+            let y = 84;
+            doc.setFont(undefined, 'bold');
+            doc.text('ID', 40, y); doc.text('Name', 80, y); doc.text('Ping', 330, y); doc.text('Identifiers', 380, y);
+            doc.setFont(undefined, 'normal');
+            y += 16;
+            serverDataGlobal.players_list.forEach(p => {
+                if (y > 800) { doc.addPage(); y = 44; }
+                doc.text(String(p.id), 40, y);
+                doc.text(String(p.name || '').substring(0, 38), 80, y);
+                doc.text(`${p.ping}ms`, 330, y);
+                doc.text((p.identifiers || []).join(' ').substring(0, 55), 380, y);
+                y += 13;
+            });
+            doc.save(`players_${serverDataGlobal.code}.pdf`);
+            showToast("Downloaded players PDF");
+        }
+
+        function exportResources() {
+            if (!serverDataGlobal || !serverDataGlobal.details || !Array.isArray(serverDataGlobal.details.resources)) { showToast("No resources to export"); return; }
+            downloadFile(`resources_${serverDataGlobal.code}.txt`, serverDataGlobal.details.resources.join('\n'), 'text/plain');
+        }
+
+        function exportConvarsJSON() {
+            if (!serverDataGlobal || !serverDataGlobal.details || !serverDataGlobal.details.vars) { showToast("No config to export"); return; }
+            downloadFile(`convars_${serverDataGlobal.code}.json`, JSON.stringify(serverDataGlobal.details.vars, null, 2), 'application/json');
+        }
+
+        function downloadRawJson() {
+            if (!serverDataGlobal) return;
+            downloadFile(`server_${serverDataGlobal.code}.json`, JSON.stringify(serverDataGlobal, null, 2), 'application/json');
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            setTimeout(() => { toast.classList.remove('translate-y-0', 'opacity-100'); toast.classList.add('translate-y-20', 'opacity-0'); }, 3000);
+        }
+
+        function escapeHtml(str) {
+            if (typeof str !== 'string') return String(str);
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function saveSearchToRecent(code, title) {
+            let history = JSON.parse(localStorage.getItem('cfx_search_history') || '[]');
+            const cleanTitle = title.replace(/\^[0-9;r]/g, '');
+            history = history.filter(item => item.code !== code);
+            history.unshift({ code, title: cleanTitle, timestamp: Date.now() });
+            if (history.length > MAX_RECENT_ITEMS) history = history.slice(0, MAX_RECENT_ITEMS);
+            localStorage.setItem('cfx_search_history', JSON.stringify(history));
+            renderRecentSearches();
+        }
+
+        function renderRecentSearches() {
+            const container = document.getElementById('recentContainer');
+            const section = document.getElementById('recentSection');
+            const history = JSON.parse(localStorage.getItem('cfx_search_history') || '[]');
+            if (history.length === 0) { section.classList.add('hidden'); return; }
+            section.classList.remove('hidden');
+            container.innerHTML = '';
+            history.forEach(item => {
+                const btn = document.createElement('button');
+                btn.onclick = () => setAndResolve(item.code);
+                btn.className = "chip mono text-[11px] px-2.5 py-1.5 flex items-center gap-2 max-w-[180px]";
+                btn.innerHTML = `
+                    <span class="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></span>
+                    <span class="text-red-400 font-bold shrink-0">${item.code}</span>
+                    <span class="text-[#6f6f77] font-bold shrink-0">|</span>
+                    <span class="text-[#c9c9cf] font-medium truncate" title="${item.title}">${item.title}</span>`;
+                container.appendChild(btn);
+            });
+        }
+
+        function clearRecentSearches() {
+            localStorage.removeItem('cfx_search_history');
+            renderRecentSearches();
+            showToast("History cleared");
+        }
+    </script>
+</body>
+</html>

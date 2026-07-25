@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>H89 DEV // SYSTEM CONSOLE</title>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050505;
+    --surface: #0a0a0a;
+    --panel: #0e0e0e;
+    --border: #1a1a1a;
+    --border-bright: #333333;
+    --accent: #ff3344;
+    --accent-dim: #991f29;
+    --green: #00ff41;
+    --blue: #00a3ff;
+    --gold: #ffb800;
+    --text: #d0d0d0;
+    --muted: #555555;
+  }
+
+  * { box-sizing: border-box; outline: none; border-radius: 0 !important; }
+  
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background-color: var(--bg);
+    color: var(--text);
+    margin: 0;
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto; /* Enable page scrolling */
+  }
+
+  .scanline {
+    width: 100%; height: 100%; z-index: 9999; position: fixed; top: 0; left: 0;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%), 
+                linear-gradient(90deg, rgba(255, 0, 0, 0.01), rgba(0, 255, 0, 0.005), rgba(0, 0, 255, 0.01));
+    background-size: 100% 3px, 3px 100%; pointer-events: none;
+  }
+
+  .container {
+    width: 100%;
+    padding: 20px;
+  }
+
+  /* --- Top Navigation Bar --- */
+  nav {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--border-bright); padding-bottom: 10px; margin-bottom: 20px;
+  }
+
+  .nav-brand { display: flex; align-items: center; gap: 15px; }
+  .brand-id { background: var(--accent); color: #000; padding: 5px 12px; font-weight: 900; font-size: 18px; }
+  .brand-text h1 { margin: 0; font-size: 22px; letter-spacing: -1px; font-family: 'Share Tech Mono', monospace; }
+
+  /* --- Results View Layout --- */
+  #resultsView {
+    display: none;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+  }
+
+  /* --- Top Dashboard Stats --- */
+  .dashboard {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--border); border: 1px solid var(--border);
+  }
+  .dash-item { background: var(--surface); padding: 12px 20px; display: flex; flex-direction: column; gap: 2px; }
+  .dash-label { font-size: 9px; color: var(--muted); font-weight: 700; text-transform: uppercase; }
+  .dash-val { font-size: 22px; font-weight: 500; font-family: 'Share Tech Mono', monospace; }
+
+  /* --- Controls Bar --- */
+  .controls { display: flex; gap: 10px; }
+  .search-input {
+    flex: 1; background: #000; border: 1px solid var(--border-bright);
+    padding: 12px 20px; color: var(--green); font-family: inherit; font-size: 13px;
+  }
+  .search-input:focus { border-color: var(--accent); }
+
+  .btn {
+    border: 1px solid var(--border-bright); background: transparent; color: #fff;
+    padding: 0 20px; font-weight: 700; font-size: 11px; cursor: pointer;
+    text-transform: uppercase; display: flex; align-items: center; justify-content: center;
+    gap: 10px; height: 42px; position: relative; overflow: hidden; transition: all 0.1s;
+  }
+  .btn::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: var(--text); z-index: -1; transition: all 0.2s; }
+  .btn:hover { color: #000; border-color: var(--text); }
+  .btn:hover::before { left: 0; }
+  .btn-accent { border-color: var(--accent); color: var(--accent); }
+  .btn-accent::before { background: var(--accent); }
+  .btn-accent:hover { color: #000; border-color: var(--accent); }
+  .btn-danger { border-color: var(--accent); color: var(--accent); }
+  .btn-danger:hover { background: var(--accent); color: #000; }
+
+  /* --- Module Navigation --- */
+  .module-nav { display: flex; gap: 2px; }
+  .m-tab {
+    padding: 12px 25px; background: var(--panel); border: 1px solid var(--border);
+    font-size: 11px; font-weight: 700; color: var(--muted); cursor: pointer;
+  }
+  .m-tab.active { background: #151515; color: #fff; border-bottom: 2px solid var(--accent); }
+
+  /* --- Main Content Panels --- */
+  .view-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    display: none;
+    flex-direction: column;
+  }
+  .view-panel.active { display: flex; }
+
+  /* --- Table Customization --- */
+  table.dataTable { width: 100% !important; border-collapse: collapse !important; border: none !important; }
+  table.dataTable thead th {
+    background: #111; color: var(--muted) !important; text-align: left !important;
+    font-size: 10px !important; padding: 14px 15px !important; border-bottom: 1px solid var(--border-bright) !important;
+  }
+  table.dataTable tbody td {
+    padding: 12px 15px !important; font-size: 12px !important;
+    border-bottom: 1px solid #121212 !important; color: #ccc;
+  }
+  table.dataTable tbody tr:hover { background: #121212 !important; }
+
+  tr.risk-row { background: rgba(255, 51, 68, 0.05) !important; border-left: 3px solid var(--accent) !important; }
+  .code-text { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #888; background: #050505; padding: 8px; border: 1px solid #111; }
+  .tag-badge { font-size: 9px; font-weight: 800; padding: 2px 6px; border: 1px solid currentColor; text-transform: uppercase; }
+
+  /* --- Code Peek Modal --- */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    z-index: 10000; align-items: center; justify-content: center; padding: 40px;
+  }
+  .modal-content {
+    background: var(--surface); border: 1px solid var(--border-bright);
+    width: 100%; max-width: 1000px; height: 100%; max-height: 700px;
+    display: flex; flex-direction: column;
+  }
+  .modal-header {
+    padding: 15px 25px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    background: #0d0d0d;
+  }
+  .modal-body { flex: 1; overflow: auto; padding: 0; background: #050505; position: relative; }
+  .line-numbers {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 40px;
+    background: #0a0a0a; border-right: 1px solid #1a1a1a;
+    color: #444; font-size: 11px; text-align: right; padding-right: 8px; padding-top: 20px;
+    user-select: none;
+  }
+  .code-pre {
+    margin: 0; padding: 20px 20px 20px 55px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #ccc;
+    white-space: pre; line-height: 1.5;
+  }
+  .highlight-line { background: rgba(255, 51, 68, 0.15); display: block; width: 100%; }
+
+  /* --- Filters Area --- */
+  .filter-row {
+    display: none; padding: 10px; background: #080808; border: 1px solid var(--border);
+    gap: 8px; flex-wrap: wrap;
+  }
+  .f-pill {
+    padding: 8px 16px; border: 1px solid #222; font-size: 10px; font-weight: 700;
+    color: var(--muted); cursor: pointer; transition: 0.1s;
+  }
+  .f-pill:hover { border-color: #444; color: #fff; }
+  .f-pill.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+  /* --- Map Area --- */
+  .map-ui { display: flex; height: 750px; width: 100%; overflow: hidden; border: 1px solid var(--border); }
+  .map-side { width: 280px; background: #0c0d12; border-right: 1px solid #222; display: flex; flex-direction: column; }
+  #map-canvas { flex: 1; background: #050505; }
+  .m-side-content { padding: 15px; flex: 1; overflow-y: auto; }
+  .m-list-item { background: #12141a; border: 1px solid #1a1c24; padding: 10px; margin-bottom: 5px; cursor: pointer; font-size: 10px; }
+
+  /* --- Init Screen --- */
+  .init-overlay {
+    padding: 120px 40px; text-align: center; background: var(--surface); border: 1px dashed #333; margin-top: 50px;
+  }
+
+  /* --- Loader --- */
+  #loading {
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: #000; z-index: 10001; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .p-frame { width: 350px; border: 1px solid var(--border-bright); padding: 4px; margin-top: 25px; }
+  .p-inner { height: 8px; background: var(--accent); width: 0%; transition: width 0.1s; }
+
+  footer { text-align: center; padding: 40px; font-size: 10px; color: var(--muted); border-top: 1px solid var(--border); letter-spacing: 2px; }
+</style>
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<div class="modal-overlay" id="codeModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div id="modalTitle" style="font-size:11px; font-weight:700; color:var(--muted);">FILE_VIEWER</div>
+            <button class="btn" style="height:30px; padding:0 15px; border-color:var(--accent); color:var(--accent);" onclick="closeCodePeek()">CLOSE_X</button>
+        </div>
+        <div class="modal-body">
+            <div class="line-numbers" id="lineNums"></div>
+            <pre class="code-pre" id="codeDisplay"></pre>
+        </div>
+    </div>
+</div>
+
+<div id="loading">
+  <p style="font-weight: 800; letter-spacing: 6px; font-size: 12px; color: var(--accent);">SYSTEM_STREAM_EXTRACTION</p>
+  <div class="p-frame"><div class="p-inner" id="pBar"></div></div>
+  <p id="pText" style="margin-top:12px; font-size:10px; color:var(--muted); font-family:monospace;">INITIALIZING_BUFFERS...</p>
+</div>
+
+<div class="container">
+  <nav>
+    <div class="nav-brand">
+      <div class="brand-id">H89</div>
+      <div class="brand-text"><h1>H89 DEV</h1></div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 15px;">
+      <a href="/" style="border: 1px solid var(--accent); color: var(--accent); background: transparent; padding: 6px 15px; font-weight: 700; font-size: 11px; cursor: pointer; text-decoration: none; text-transform: uppercase; transition: all 0.1s;">&lt;&lt; HOME_PORTAL</a>
+      <div style="font-size:10px; color:var(--muted);">[ TERMINAL_STATUS: READY ]</div>
+    </div>
+  </nav>
+
+  <div id="resultsView">
+    <div class="dashboard">
+      <div class="dash-item"><div class="dash-label">Risks Detected</div><div class="dash-val" id="countRisks" style="color:var(--accent)">0</div></div>
+      <div class="dash-item"><div class="dash-label">Triggers Extracted</div><div class="dash-val" id="countTriggers">0</div></div>
+      <div class="dash-item"><div class="dash-label">Network Streams</div><div class="dash-val" id="countWebhooks" style="color:var(--blue)">0</div></div>
+      <div class="dash-item"><div class="dash-label">Shield Status</div><div class="dash-val" id="shieldStatus" style="color:var(--muted)">INACTIVE</div></div>
+    </div>
+
+    <div class="controls">
+      <input type="text" id="masterSearch" class="search-input" placeholder="CMD: SCAN_DATABASE_FOR_PATTERN..." />
+      <button class="btn" id="toggleFilters">FILTERS</button>
+      <button class="btn btn-danger" onclick="window.location.reload()">TERMINATE</button>
+    </div>
+
+    <div class="module-nav">
+      <div class="m-tab active" onclick="switchModule('triggersTab', this)">SYSTEM_LOGS</div>
+      <div class="m-tab" onclick="switchModule('webhooksTab', this)">NETWORK_TRAFFIC</div>
+      <div class="m-tab" onclick="switchModule('mapTab', this)">MAP_EXTRACTION</div>
+      <div class="m-tab" onclick="switchModule('cfxFinderTab', this)">CFX_DECODER</div>
+    </div>
+
+    <div id="filterBar" class="filter-row">
+      <div class="f-pill active" onclick="switchSubFilter('triggersTab', this)">ALL</div>
+      <div class="f-pill" onclick="switchSubFilter('riskOnlyTab', this)" style="color:var(--accent)">RISKS</div>
+      <div class="f-pill" onclick="switchSubFilter('targetIdTab', this)" style="color:var(--gold)">TARGET_ID</div>
+      <div class="f-pill" onclick="switchSubFilter('reviveTab', this)">REVIVE</div>
+      <div class="f-pill" onclick="switchSubFilter('clientTab', this)">CLIENT_OPS</div>
+      <div class="f-pill" onclick="switchSubFilter('backdoorsTab', this)">BACKDOORS</div>
+      <div class="f-pill" onclick="switchSubFilter('moneyTab', this)">MONEY</div>
+      <div class="f-pill" onclick="switchSubFilter('itemsTab', this)">INVENTORY</div>
+    </div>
+
+    <div id="triggersTab" class="view-panel active"><table id="tTable" class="display"><thead><tr><th>LOCATION</th><th>LN</th><th>COMMAND</th><th>TAG</th></tr></thead><tbody></tbody></table></div>
+    <div id="riskOnlyTab" class="view-panel"><table id="rkTable" class="display"><thead><tr><th>LOCATION</th><th>LN</th><th>SYSTEM_STATUS</th><th>LEVEL</th></tr></thead><tbody></tbody></table></div>
+    <div id="targetIdTab" class="view-panel"><table id="tidTable" class="display"><thead><tr><th>LOCATION</th><th>LN</th><th>PATTERN</th><th>TYPE</th></tr></thead><tbody></tbody></table></div>
+    <div id="reviveTab" class="view-panel"><table id="rTable" class="display"><thead><tr><th>LOCATION</th><th>LN</th><th>PATTERN</th><th>TYPE</th></tr></thead><tbody></tbody></table></div>
+    <div id="clientTab" class="view-panel"><table id="cTable" class="display"><thead><tr><th>LOCATION</th><th>LN</th><th>PATTERN</th><th>TYPE</th></tr></thead><tbody></tbody></table></div>
+    <div id="backdoorsTab" class="view-panel"><table id="bkTable" class="display"><thead><tr><th>LOCATION</th><th>LN</th><th>PATTERN</th><th>THREAT</th></tr></thead><tbody></tbody></table></div>
+    <div id="moneyTab" class="view-panel"><table id="mTable" class="display"><thead><tr><th>LOCATION</th><th>LN</th><th>PATTERN</th><th>CAT</th></tr></thead><tbody></tbody></table></div>
+    <div id="itemsTab" class="view-panel"><table id="iTable" class="display"><thead><tr><th>LOCATION</th><th>LN</th><th>PATTERN</th><th>CAT</th></tr></thead><tbody></tbody></table></div>
+    <div id="webhooksTab" class="view-panel"><table id="wTable" class="display"><thead><tr><th>ENDPOINT_SOURCE</th><th>SECURITY_ACTION</th></tr></thead><tbody></tbody></table></div>
+
+    <div id="cfxFinderTab" class="view-panel">
+        <div style="padding: 25px;">
+            <div style="font-size:11px; color:var(--muted); margin-bottom:15px; font-weight:700;">CFX_NETWORK_DECODER</div>
+            <div class="controls" style="margin-bottom:20px;">
+                <input type="text" id="cfxUrlInput" class="search-input" placeholder="INPUT: cfx.re/join/XXXXXX or Join ID">
+                <button class="btn btn-danger" style="height:46px" onclick="fetchCfxInfo()">EXTRACT</button>
+            </div>
+            <div id="cfxResult" style="display:none;">
+                <div class="dashboard" style="margin-bottom:20px;">
+                    <div class="dash-item"><div class="dash-label">Target Name</div><div class="dash-val" id="cfxName">-</div></div>
+                    <div class="dash-item"><div class="dash-label">Population</div><div class="dash-val" id="cfxCount" style="color:var(--green)">-</div></div>
+                    <div class="dash-item"><div class="dash-label">ID Code</div><div class="dash-val" id="cfxId" style="color:var(--gold)">-</div></div>
+                    <div class="dash-item"><div class="dash-label">Status</div><div class="dash-val" style="color:var(--green)">ACTIVE</div></div>
+                </div>
+                <table id="pTable" class="display"><thead><tr><th>PID</th><th>IDENTIFIER</th><th>MS</th></tr></thead><tbody></tbody></table>
+            </div>
+            <div id="cfxError" style="display:none; color:var(--accent); text-align:center; padding:20px; border:1px dashed var(--accent);">[ ACCESS_DENIED ]</div>
+        </div>
+    </div>
+
+    <div id="mapTab" class="view-panel">
+        <div class="map-ui">
+            <aside class="map-side">
+                <div style="display:flex;">
+                    <div class="m-tab active" style="flex:1; text-align:center; padding:8px;" onclick="switchMapPane('m-find', this)">COORD</div>
+                    <div class="m-tab" style="flex:1; text-align:center; padding:8px;" onclick="switchMapPane('m-stars', this)">LANDMARK</div>
+                </div>
+                <div class="m-side-content">
+                    <div id="m-find" class="map-pane">
+                        <input type="number" id="m-input-x" class="search-input" placeholder="COORD_X" style="margin-bottom:8px; height:36px; width:100%;">
+                        <input type="number" id="m-input-y" class="search-input" placeholder="COORD_Y" style="margin-bottom:12px; height:36px; width:100%;">
+                        <button class="btn btn-danger" style="width:100%; height:36px;" onclick="jumpToMapCoord()">JUMP</button>
+                        <button class="btn" style="width:100%; margin-top:8px; font-size:9px; height:30px;" onclick="fixMap()">FIX_LOAD</button>
+                    </div>
+                    <div id="m-stars" class="map-pane" style="display:none;"><div id="map-landmarks-list"></div></div>
+                </div>
+            </aside>
+            <div id="map-canvas"></div>
+            <div style="position:absolute; top:15px; right:15px; z-index:900; display:flex; gap:5px;">
+                <button class="btn btn-sm" style="height:34px; font-size:9px;" onclick="chLayer('satelite', this)">SAT</button>
+                <button class="btn btn-sm" style="height:34px; font-size:9px;" onclick="chLayer('atlas', this)">ROAD</button>
+                <button class="btn btn-sm" style="height:34px; font-size:9px;" onclick="chLayer('grid', this)">GRID</button>
+            </div>
+            <div style="position:absolute; bottom:15px; right:15px; z-index:900; background:#000; border:1px solid #333; padding:4px 12px; font-size:10px; color:var(--green);">
+                X:<span id="m-hud-x">0</span> Y:<span id="m-hud-y">0</span>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <div id="uploadView" class="init-overlay">
+    <div class="init-card">
+        <div style="font-size:40px; margin-bottom:15px; color:var(--accent)">[ ! ]</div>
+        <h2 style="font-family:'Share Tech Mono'; letter-spacing:8px; font-size:26px; margin-bottom:40px;">H89 DEV CONSOLE</h2>
+        <div style="position:relative; display:inline-block;">
+          <button class="btn btn-danger" style="height:55px; padding:0 40px; font-size:14px;">INITIATE_SCAN</button>
+          <input type="file" id="folderInput" webkitdirectory directory multiple style="position:absolute; left:0; top:0; width:100%; height:100%; opacity:0; cursor:pointer;" />
+        </div>
+    </div>
+  </div>
+
+  <footer>H89 DEV // RAW SECURITY EXTRACTION // TERMINAL_MODE</footer>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+  let dataStore = { all: [], riskOnly: [], targetId: [], revive: [], client: [], money: [], items: [], backdoors: [], webhooks: [] };
+  let riskyResources = new Set();
+  let dataTables = {};
+  let fileContentsMap = new Map();
+
+  function switchModule(id, el) {
+    $('.view-panel').removeClass('active').hide();
+    $('.m-tab').removeClass('active');
+    $(`#${id}`).addClass('active').css('display', 'flex');
+    $(el).addClass('active');
+    if(id==='triggersTab') $('#toggleFilters').show(); else { $('#toggleFilters').hide(); $('#filterBar').hide(); }
+    if(id==='mapTab') fixMap();
+  }
+  function switchSubFilter(id, el) { $('.view-panel').removeClass('active').hide(); $('.f-pill').removeClass('active'); $(`#${id}`).addClass('active').css('display', 'flex'); $(el).addClass('active'); }
+  $('#toggleFilters').on('click', function() { $('#filterBar').toggle().css('display', $('#filterBar').is(':visible') ? 'flex' : 'none'); });
+
+  function openCodePeek(path, line) {
+    const content = fileContentsMap.get(path);
+    if(!content) return;
+    const lines = content.split(/\r?\n/);
+    $('#modalTitle').text(`PEEKING: ${path}`);
+    let displayHtml = "";
+    let lineNumsHtml = "";
+    const start = Math.max(0, line - 20);
+    const end = Math.min(lines.length, line + 20);
+    for(let i = start; i < end; i++) {
+        const isTarget = (i + 1) === line;
+        const lineContent = lines[i] === "" ? " " : lines[i];
+        lineNumsHtml += `<div>${i+1}</div>`;
+        displayHtml += `<span class="${isTarget?'highlight-line':''}">${esc(lineContent)}\n</span>`;
+    }
+    $('#lineNums').html(lineNumsHtml); $('#codeDisplay').html(displayHtml); $('#codeModal').css('display', 'flex');
+  }
+  function closeCodePeek() { $('#codeModal').hide(); }
+  function copyText(text) { navigator.clipboard.writeText(text); alert("COPIED_TO_CLIPBOARD"); }
+
+  document.getElementById('folderInput').addEventListener('change', async (e) => {
+    const allFiles = Array.from(e.target.files).filter(f => /\.(lua|js|cfg|txt|json|yml|html)$/i.test(f.name));
+    if (!allFiles.length) return;
+    $('#loading').css('display', 'flex');
+    Object.keys(dataStore).forEach(k => dataStore[k] = []);
+    riskyResources.clear(); fileContentsMap.clear();
+
+    const RISK_RE = /shared_script\s+['"]@data\/(ai_module_fg-obfuscated|shared_fg-obfuscated)\.lua['"]/i;
+    const BACKDOOR_RE = /PerformHttpRequest|os\.execute|io\.popen|load\(|assert\(load|xpcall|pcall\(load|Lynx|Eulen|Brute|Relative|Ham|Dopamine/i;
+    const WEBHOOK_RE = /https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+/g;
+
+    for (const f of allFiles) {
+      try { const t = await f.text(); fileContentsMap.set(f.webkitRelativePath, t); if (RISK_RE.test(t)) riskyResources.add(f.webkitRelativePath.split('/')[0]); } catch(err) {}
+    }
+
+    const batchSize = 30;
+    for (let i = 0; i < allFiles.length; i += batchSize) {
+      const batch = allFiles.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (file) => {
+        try {
+          const content = fileContentsMap.get(file.webkitRelativePath);
+          const resName = file.webkitRelativePath.split('/')[0];
+          const isRisky = riskyResources.has(resName);
+          content.split(/\r?\n/).forEach((line, idx) => {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('--') || trimmed.startsWith('//')) return;
+            const isServer = trimmed.includes('TriggerServerEvent');
+            const isClient = trimmed.includes('TriggerEvent');
+            const isBack = BACKDOOR_RE.test(trimmed);
+            const isRiskLine = RISK_RE.test(trimmed);
+            if (isServer || isClient || isBack || isRiskLine) {
+              const entry = { path: file.webkitRelativePath, line: idx + 1, text: trimmed, risk: isRisky, isServer, isClient, isRiskLine };
+              dataStore.all.push(entry);
+              if (isRiskLine) dataStore.riskOnly.push(entry);
+              if (isClient && !isServer && !isRiskLine) dataStore.client.push(entry);
+              if (/targetId|serverId|toPlayer|playerId|target_id/i.test(trimmed)) dataStore.targetId.push(entry);
+              const evMatch = trimmed.match(/(?:TriggerServerEvent|TriggerEvent)\s*\(\s*['"]([^'"]+)['"]/i);
+              if (evMatch && /revive|hospital|ambulance|ems|laststand/i.test(evMatch[1])) dataStore.revive.push(entry);
+              if (/addMoney|setAccountMoney|giveMoney|addBank|deposit|withdraw|transfer/i.test(trimmed)) dataStore.money.push(entry);
+              if (/addItem|giveItem|receiveItem|addInventoryItem|spawnItem/i.test(trimmed)) dataStore.items.push(entry);
+              if (isBack) dataStore.backdoors.push(entry);
+            }
+            let m; while ((m = WEBHOOK_RE.exec(line)) !== null) { dataStore.webhooks.push({ url: m[0], path: file.webkitRelativePath }); }
+          });
+        } catch (e) {}
+      }));
+      const p = Math.round(((i + batch.length) / allFiles.length) * 100);
+      $('#pBar').css('width', p + '%'); $('#pText').text(`${p}% - READ_OPERATION_${i+batch.length}`);
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    const esc = (s) => s ? s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : '';
+    window.esc = esc;
+    const row = (d, badge, color) => `<tr class="${d.risk ? 'risk-row' : ''}">
+      <td>${d.risk ? '<span style="color:var(--accent);font-weight:900;">[RISK] </span>' : ''}${esc(d.path)}</td>
+      <td style="color:var(--muted)">${d.line}</td>
+      <td>${d.isRiskLine ? '<span style="color:var(--accent)">CRITICAL_OBFUSCATION_FOUND</span>' : `<div class="code-text" onclick="openCodePeek('${d.path}', ${d.line})" style="cursor:zoom-in">${esc(d.text.substring(0,100))}</div>`}</td>
+      <td><span class="tag-badge" style="color:${d.risk? 'var(--accent)' : color}">${d.risk?'CRITICAL':badge}</span><button class="btn btn-sm" style="height:20px; padding:0 5px; margin-left:5px; font-size:8px" onclick="copyText('${esc(d.text)}')">COPY</button></td>
+    </tr>`;
+
+    $('#tTable tbody').html(dataStore.all.map(d => row(d, 'LOG', '#888')).join(''));
+    $('#rkTable tbody').html(dataStore.riskOnly.map(d => `<tr class="risk-row"><td>[RISK] ${esc(d.path)}</td><td>${d.line}</td><td>MALICIOUS_STREAM_EXTRACTED</td><td>DANGER</td></tr>`).join(''));
+    $('#tidTable tbody').html(dataStore.targetId.map(d => row(d, 'TARGET_ID', '#ffb800')).join(''));
+    $('#rTable tbody').html(dataStore.revive.map(d => row(d, 'REVIVE', '#00ff41')).join(''));
+    $('#cTable tbody').html(dataStore.client.map(d => row(d, 'CLIENT', '#0088ff')).join(''));
+    $('#bkTable tbody').html(dataStore.backdoors.map(d => row(d, 'BACKDOOR', '#ff3344')).join(''));
+    $('#mTable tbody').html(dataStore.money.map(d => row(d, 'MONEY', '#00ff41')).join(''));
+    $('#iTable tbody').html(dataStore.items.map(d => row(d, 'ITEM', '#ffb800')).join(''));
+    $('#wTable tbody').html(dataStore.webhooks.map(w => `<tr><td style="color:var(--blue); font-weight:800;">${esc(w.path)}</td><td><button class="btn btn-sm" onclick="window.open('${w.url}')">INSPECT</button><button class="btn btn-sm btn-danger" style="margin-left:5px" onclick="deleteWebhook(this, '${w.url}')">BYPASS</button></td></tr>`).join(''));
+
+    $('#countRisks').text(riskyResources.size); $('#countTriggers').text(dataStore.all.length); $('#countWebhooks').text(dataStore.webhooks.length);
+    if (riskyResources.size > 0) { $('#shieldStatus').text("FIVEGUARD_DETECTED").css('color', 'var(--accent)'); } else { $('#shieldStatus').text("INACTIVE").css('color', 'var(--muted)'); }
+
+    $('#loading').hide(); $('#uploadView').hide(); $('#resultsView').css('display', 'flex');
+    ['t','rk','tid','r','c','bk','m','i','w'].forEach(k => dataTables[k] = $(`#${k}Table`).DataTable({ pageLength: 50, destroy: true, info: false, lengthChange: false, ordering: true }));
+    $('#masterSearch').on('keyup', function() { const v = $(this).val(); Object.values(dataTables).forEach(dt => dt.search(v).draw()); });
+  });
+
+  async function deleteWebhook(btn, url) { if(confirm("Terminate network stream?")) { try { await fetch(url, {method:'DELETE'}); $(btn).closest('tr').fadeOut(); } catch(e) {} } }
+  
+  async function fetchCfxInfo() {
+    const input = $('#cfxUrlInput').val().trim(); if (!input) return;
+    let id = input; if (input.includes('cfx.re/join/')) id = input.split('cfx.re/join/')[1].replace('/', '');
+    $('#loading').css('display', 'flex'); $('#cfxResult, #cfxError').hide(); if (dataTables.p) dataTables.p.destroy();
+    const target = 'https://servers-frontend.fivem.net/api/servers/single/' + id;
+    const proxies = [`https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`, `https://corsproxy.io/?${encodeURIComponent(target)}`, `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(target)}` ];
+    let success = false;
+    for (const url of proxies) {
+        try {
+            const res = await fetch(url); if (!res.ok) continue;
+            const data = await res.json();
+            if (data && data.Data) {
+                const s = data.Data;
+                $('#cfxName').html(`<span style="color:var(--accent)">[ONLINE]</span> ` + s.hostname.replace(/\^[0-9]/g, ''));
+                $('#cfxCount').text(`${s.clients} / ${s.sv_maxclients}`); $('#cfxId').text(id.toUpperCase());
+                let pHtml = (s.players && s.players.length > 0) ? s.players.sort((a,b) => a.id - b.id).map(p => `<tr><td>${p.id}</td><td style="color:#fff; font-weight:600;">${esc(p.name)}</td><td style="color:var(--green)">${p.ping}ms</td></tr>`).join('') : '<tr><td colspan="3" style="text-align:center">PLAYER_LIST_ENCRYPTED</td></tr>';
+                $('#pTable tbody').html(pHtml);
+                dataTables.p = $('#pTable').DataTable({ pageLength: 50, info: false, lengthChange: false, ordering: true });
+                $('#cfxResult').fadeIn(); success = true; break;
+            }
+        } catch (e) {}
+    }
+    if (!success) $('#cfxError').fadeIn();
+    $('#loading').hide();
+  }
+
+  let gtaMap; let mapLayers = {}; let tempMarker = null;
+  function initGtaMap() {
+    const CRS = L.extend({}, L.CRS.Simple, { projection: L.Projection.LonLat, transformation: new L.Transformation(0.02072, 117.3, -0.0205, 172.8), infinite: true });
+    gtaMap = L.map('map-canvas', { crs: CRS, minZoom: 1, maxZoom: 5, zoomControl: false, center: [-1000, 0], zoom: 2 });
+    L.control.zoom({ position: 'bottomright' }).addTo(gtaMap);
+    mapLayers = { satelite: L.tileLayer('https://gtamap.xyz/mapStyles/styleSatelite/{z}/{x}/{y}.jpg', { noWrap: true }), atlas: L.tileLayer('https://gtamap.xyz/mapStyles/styleAtlas/{z}/{x}/{y}.jpg', { noWrap: true }), grid: L.tileLayer('https://gtamap.xyz/mapStyles/styleGrid/{z}/{x}/{y}.png', { noWrap: true }) };
+    mapLayers.satelite.addTo(gtaMap);
+    gtaMap.on('mousemove', e => { $('#m-hud-x').text(e.latlng.lng.toFixed(1)); $('#m-hud-y').text(e.latlng.lat.toFixed(1)); });
+    gtaMap.on('click', e => { $('#m-input-x').val(e.latlng.lng.toFixed(1)); $('#m-input-y').val(e.latlng.lat.toFixed(1)); dropMapMarker(e.latlng.lng, e.latlng.lat, "POINT_EXTRACTED"); });
+    const lms = [{ n: "Legion Sq", x: 205, y: -930 }, { n: "LSIA", x: -1037, y: -2737 }, { n: "Mt Chiliad", x: 440, y: 5580 }, { n: "Maze Bank", x: -75, y: -818 }, { n: "Casino", x: 925, y: 46 }, { n: "Grove St", x: 115, y: -1945 }];
+    $('#map-landmarks-list').html(lms.map(l => `<div class="m-list-item" onclick="gtaMap.setView([${l.y}, ${l.x}], 4); dropMapMarker(${l.x}, ${l.y}, '${l.n}')"><span>${l.n}</span><span style="float:right; color:#555;">${l.x},${l.y}</span></div>`).join(''));
+  }
+  function fixMap() { setTimeout(() => { if(gtaMap) gtaMap.invalidateSize(); }, 400); }
+  function chLayer(k, btn) { Object.values(mapLayers).forEach(l => gtaMap.removeLayer(l)); mapLayers[k].addTo(gtaMap); $('.map-ui .btn').removeClass('active'); $(btn).addClass('active'); }
+  function switchMapPane(id, el) { $('.map-pane').hide(); $(`#${id}`).show(); $('.map-side .m-tab').removeClass('active'); $(el).addClass('active'); }
+  function jumpToMapCoord() { const x = parseFloat($('#m-input-x').val()); const y = parseFloat($('#m-input-y').val()); if(!isNaN(x) && !isNaN(y)) { gtaMap.setView([y, x], 4); dropMapMarker(x, y, "JUMP_TARGET"); } }
+  function dropMapMarker(x, y, label) { if(tempMarker) gtaMap.removeLayer(tempMarker); tempMarker = L.marker([y, x]).addTo(gtaMap).bindPopup(`<b>${label}</b><br>X: ${x}, Y: ${y}`).openPopup(); }
+  $(document).ready(() => { initGtaMap(); });
+</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a20bae227970ce49',t:'MTc4NDk4NzkxNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
